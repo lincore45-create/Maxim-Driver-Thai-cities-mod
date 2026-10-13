@@ -47,7 +47,7 @@ button:focus-visible{outline:3px solid var(--black); outline-offset:3px;}
 #lives i{font-style:normal; color:var(--red); transition:color .2s, transform .2s;}
 #lives i.lost{color:rgba(255,255,255,.25); transform:scale(.8);}
 .progress{margin-top:10px; height:8px; background:rgba(20,20,20,.5); border-radius:6px; position:relative; margin-right:4px;}
-.progress .fill{height:100%; width:0; background:var(--yellow); border-radius:6px;}
+.progress .fill{height:100%; width:100%; background:var(--yellow); border-radius:6px; transform:scaleX(0); transform-origin:0 50%; will-change:transform;}
 .progress .mark{position:absolute; top:-3px; width:3px; height:14px; background:#fff; border-radius:2px; transform:translateX(-50%);}
 .progress .mark em{position:absolute; top:16px; left:50%; transform:translateX(-50%); font-style:normal; font-size:11px; font-weight:800; color:var(--black); background:#fff; padding:1px 5px; border-radius:6px; white-space:nowrap;}
 .progress .mark.got em{background:var(--yellow);}
@@ -56,9 +56,11 @@ button:focus-visible{outline:3px solid var(--black); outline-offset:3px;}
 #muteBtn{position:absolute; top:10px; right:12px; width:44px; height:44px; border-radius:50%; border:none; background:rgba(20,20,20,.74); color:#fff; font-size:20px; z-index:20; display:flex; align-items:center; justify-content:center;}
 
 /* Controls */
-#controls{position:absolute; left:0; right:0; bottom:0; padding:12px 12px 16px; display:none; justify-content:space-between; align-items:flex-end; gap:10px;}
+#controls{position:absolute; left:0; right:0; bottom:0; padding:12px 14px calc(46px + env(safe-area-inset-bottom,0px)); display:none; justify-content:space-between; align-items:flex-end; gap:10px;}
 .pad{display:flex; gap:10px;}
 .btn{width:min(78px,21vw); height:min(78px,21vw); border-radius:22px; border:none; background:rgba(20,20,20,.66); color:#fff; font-size:30px; font-weight:800; touch-action:none; display:flex; align-items:center; justify-content:center; box-shadow:0 5px 0 rgba(0,0,0,.35);}
+.btn{transition:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; pointer-events:none;}
+.pad{touch-action:none; pointer-events:auto;}
 .btn.on{transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,.35);}
 .btn.gas{background:var(--yellow); color:var(--black); font-size:15px; height:min(96px,26vw);}
 .btn.brake{background:#fff; color:var(--black); font-size:13px;}
@@ -487,7 +489,8 @@ let W = 0, H = 0, F = 1, HOR = 0, CX = 0, Q = 1, camX = 0, camZ = 0, camH = CAM_
 let HAZE = [255, 238, 218];
 const hex = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 const shade = (c, a) => a < 0 ? [c[0] * (1 + a), c[1] * (1 + a), c[2] * (1 + a)] : [c[0] + (255 - c[0]) * a, c[1] + (255 - c[1]) * a, c[2] + (255 - c[2]) * a];
-const rgb = c => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+const RGBC = new Map();
+const rgb = c => { const r = c[0] | 0, g = c[1] | 0, b = c[2] | 0, k = (r << 16) | (g << 8) | b; let s = RGBC.get(k); if (s === undefined){ if (RGBC.size > 30000) RGBC.clear(); s = `rgb(${r},${g},${b})`; RGBC.set(k, s); } return s; };
 const fogc = c => { if (TINT && tintK > 0) c = TINT(c, tintK); return fog <= 0 ? c : [c[0] + (HAZE[0] - c[0]) * fog, c[1] + (HAZE[1] - c[1]) * fog, c[2] + (HAZE[2] - c[2]) * fog]; };
 function setFog(z){ fog = Math.max(0, Math.min(.92, (z - camZ - 100) / (DRAW_DIST - 100))); }
 const COL = {
@@ -569,8 +572,8 @@ function fq(f, u0, v0, u1, v1, c){ if (f) poly([fpt(f, u0, v0), fpt(f, u1, v0), 
 function ftext(f, txt, u, v, hFrac, c){
   if (!f) return;
   const p = fpt(f, u, v), hp = Math.abs(fpt(f, u, 0)[1] - fpt(f, u, 1)[1]) * hFrac, wp = Math.abs(fpt(f, 1, v)[0] - fpt(f, 0, v)[0]);
-  const size = Math.min(hp, wp * .9 / (txt.length * .62)); if (size < 3.5) return;
-  ctx.fillStyle = rgb(fogc(c)); ctx.font = `900 ${size.toFixed(1)}px Rubik, 'Noto Sans Thai', 'Noto Sans SC', sans-serif`;
+  const size = Math.min(hp, wp * .9 / (txt.length * .62)); if (size < 5) return;
+  ctx.fillStyle = rgb(fogc(c)); ctx.font = `900 ${Math.round(size)}px Rubik, 'Noto Sans Thai', 'Noto Sans SC', sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, p[0], p[1] + size * .05);
 }
 function shadow(x, zN, zF, hw){
@@ -839,6 +842,7 @@ function drawProp0(p){
   }
 }
 function drawLamp(st, x, z, inv, s, B_){
+  if (z - camZ > 130 && st !== 'park'){ B_(x, .08, z - .08, z + .08, 0, 6.2, COL.pole); B_(x + inv * .7, .7, z - .06, z + .06, 6.05, 6.2, COL.pole); return; }
   if (st === 'park'){
     const pc = [46,60,52];
     B_(x, .07, z - .07, z + .07, 0, 3.6, pc); B_(x, .2, z - .2, z + .2, 3.6, 3.7, pc);
@@ -976,6 +980,7 @@ function drawRedLanterns(z){
 // Lanna paper lanterns (khom) strung across the street
 function drawKhom(z, k){
   const W2 = 8.4, hAt = ropeArc(z, W2, 13.2, .9, [60,40,30]);
+  if (z - camZ > 140){ withTint(THEME.night ? 0 : 1, () => { for (let i = 0; i < 9; i++){ const xx = -W2 + (i + .5) * W2 * 2 / 9, hh = hAt(xx); box(xx, .3, z - .3, z + .3, hh - 1.15, hh - .3, KHOM_C[(i + k) % KHOM_C.length]); } }); return; }
   withTint(THEME.night ? 0 : 1, () => {
     for (let i = 0; i < 9; i++){
       const xx = -W2 + (i + .5) * W2 * 2 / 9, hh = hAt(xx), c = KHOM_C[(i + k) % KHOM_C.length];
@@ -1173,7 +1178,7 @@ function update(dt){
   const btn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   let target = btn * CONFIG.steerSpeed;
   if (!btn && ctlMode === 'tilt') target = tilt.steer * CONFIG.steerSpeed * 1.1;
-  G.vx += (target - G.vx) * Math.min(1, dt * 10);
+  G.vx += (target - G.vx) * Math.min(1, dt * 18);
   G.x += G.vx * dt;
   const lim = ROAD_HALF + 2.4 - PLAYER.hw;
   if (G.x < -lim){ G.x = -lim; G.vx = 0; } if (G.x > lim){ G.x = lim; G.vx = 0; }
@@ -1368,6 +1373,7 @@ function drawFarPagoda(a){
   ctx.globalAlpha = 1;
 }
 
+let fxDirty = true;
 function render(){
   setView();
   const tn = performance.now() / 1000;
@@ -1379,8 +1385,10 @@ function render(){
   // road
   const startZ = Math.floor(camZ / SEG) * SEG, n = Math.ceil(DRAW_DIST / SEG);
   for (let i = n; i >= 0; i--){
-    const z1 = startZ + i * SEG, z2 = z1 + SEG + .1;
+    const z1 = startZ + i * SEG; let z2 = z1 + SEG + .1;
     if (z2 - camZ < NEAR) continue;
+    // far road is drawn in double-length segments
+    if (z1 - camZ > 150){ if (Math.round(z1 / SEG) % 2) continue; z2 += SEG; }
     const za = Math.max(z1, camZ + NEAR), idx = Math.round(z1 / SEG), alt = idx % 2 === 0, j = (rnd(idx) - .5) * 7;
     setFog(z1);
     const Dw = DISTRICTS[districtIdx(z1)], st = Dw.st;
@@ -1388,12 +1396,12 @@ function render(){
     ground(-ROAD_HALF - 9, ROAD_HALF + 9, za, z2, walk);
     sideGround(st, -1, idx, za, z2, alt); sideGround(st, 1, idx, za, z2, alt);
     withTint(.3, () => { ground(-ROAD_HALF - .38, -ROAD_HALF, za, z2, cu); ground(ROAD_HALF, ROAD_HALF + .38, za, z2, cu); });
-    if (idx % 2 === 0 && st !== 'forest' && st !== 'field'){ const sl = shade(walk, -.06); ground(-ROAD_HALF - 2.45, -ROAD_HALF - 2.35, za, z2, sl); ground(ROAD_HALF + 2.35, ROAD_HALF + 2.45, za, z2, sl); }
+    if (idx % 2 === 0 && z1 - camZ < 140 && st !== 'forest' && st !== 'field'){ const sl = shade(walk, -.06); ground(-ROAD_HALF - 2.45, -ROAD_HALF - 2.35, za, z2, sl); ground(ROAD_HALF + 2.35, ROAD_HALF + 2.45, za, z2, sl); }
     const rc = Dw.road;
     ground(-ROAD_HALF, ROAD_HALF, za, z2, [rc[0] + j, rc[1] + j, rc[2] + j]);
     if ((st === 'field' || st === 'forest') && rnd(idx * 3.7) > .88){ const px = (rnd(idx * 5.3) - .5) * 8, ze = Math.min(z2, z1 + 2.6); if (ze > za + .05) ground(px - .9, px + .9, za, ze, [rc[0] - 12, rc[1] - 12, rc[2] - 10]); }
     const dashEnd = z1 + SEG * .6;
-    if (idx % 3 === 0 && dashEnd > za){
+    if (idx % 3 === 0 && dashEnd > za && z1 - camZ < 220){
       ground(-LANE_W - .08, -LANE_W + .08, za, dashEnd, [236, 236, 230]);
       ground(LANE_W - .08, LANE_W + .08, za, dashEnd, [236, 236, 230]);
     }
@@ -1434,7 +1442,7 @@ function render(){
   // pass 3: road objects + player, far to near
   const list = G.objs.filter(o => o.z + o.hl - camZ > NEAR && o.z - camZ < DRAW_DIST).map(o => ({ z: o.z - o.hl, o }));
   list.push({ z: G.z - PLAYER.hl, player: true });
-  for (const p of G.props) if (p.z + 2.5 - camZ > NEAR && p.z - camZ < DRAW_DIST) list.push({ z: p.z - p.hl, prop: p });
+  for (const p of G.props){ const dp = p.z - camZ; if (dp + 2.5 > NEAR && dp < (p.heavy || p.k === 'swan' ? DRAW_DIST : 150)) list.push({ z: p.z - p.hl, prop: p }); }
   for (const ov of overheadItems()) list.push({ z: ov.z, over: ov });
   if (FINISH_Z - camZ < DRAW_DIST && FINISH_Z - camZ > NEAR) list.push({ z: FINISH_Z, finish: true });
   list.sort((a, b) => b.z - a.z);
@@ -1448,7 +1456,9 @@ function render(){
   ctx.restore();
 
   // crisp overlay: flash + popups
-  fctx.clearRect(0, 0, W, H);
+  const needFx = G.flash > 0 || G.wet > 0 || G.popups.length > 0;
+  if (needFx || fxDirty) fctx.clearRect(0, 0, W, H);
+  fxDirty = needFx;
   if (G.flash > 0){ fctx.fillStyle = `rgba(229,72,77,${G.flash})`; fctx.fillRect(0, 0, W, H); }
   if (G.wet > 0){
     for (let i = 0; i < 26; i++){
@@ -1507,7 +1517,7 @@ function drawBuilding0(k, side){
     const tz = z0 + 4 + rnd(seed + 4.3) * 10;
     box(xc + side * (rnd(seed + 4.5) - .5) * 2, .9, tz, tz + 1.8, h, h + 1.5, [222,222,214]);
   }
-  if (d > 240) return;
+  if (d > 200) return;
   const za = Math.max(z0 + .8, camZ + NEAR), zb = z1 - .8;
   if (zb <= za) return;
   // shopfront + striped awning
@@ -1515,7 +1525,8 @@ function drawBuilding0(k, side){
   const aw = hex(pick(D.awn, rnd(seed + 5.1))), xo = xi - side * 1.15;
   const aw2 = china ? [224,170,50] : [246,240,230];
   tintK = THEME.night ? .45 : 1;
-  for (let z = za, m = 0; z < zb; z += 2, m++){
+  if (d > 140) poly([P(xi, za, 3.05), P(xi, zb, 3.05), P(xo, zb, 2.55), P(xo, za, 2.55)], aw);
+  else for (let z = za, m = 0; z < zb; z += 2, m++){
     const ze = Math.min(zb, z + 2);
     poly([P(xi, z, 3.05), P(xi, ze, 3.05), P(xo, ze, 2.55), P(xo, z, 2.55)], m % 2 ? aw2 : aw);
   }
@@ -1526,7 +1537,7 @@ function drawBuilding0(k, side){
   for (let f = 1; f * 3.2 + 1.6 < h && f < 8; f++){
     const h0 = f * 3.2 + .4 + (lanna ? .5 : 0), h1 = h0 + 1.5;
     if (h1 > h - .2) break;
-    if (d < 130){
+    if (d < 85){
       for (let z = z0 + 1.2, c = 0; z + 1.8 < z1; z += 3.1, c++){
         if (z + 1.8 - camZ < NEAR) continue;
         const zz = Math.max(z, camZ + NEAR);
@@ -1536,14 +1547,14 @@ function drawBuilding0(k, side){
     } else poly([P(xi, za, h0), P(xi, zb, h0), P(xi, zb, h1), P(xi, za, h1)], win);
   }
   // lanterns under the awning: red ones in Chinatown, paper khom in Lanna streets
-  if ((china || lanna) && d < 130) for (let z = z0 + 2; z < z1 - 1; z += 4){
+  if ((china || lanna) && d < 90) for (let z = z0 + 2; z < z1 - 1; z += 4){
     if (z - camZ < NEAR) continue;
     const lc = china ? [214,40,40] : KHOM_C[Math.floor(rnd(seed + z) * KHOM_C.length)];
     withTint(THEME.night ? 0 : 1, () => box(xi - side * .7, .17, z, z + .34, 1.95, 2.4, lc));
   }
   tintK = THEME.night ? .35 : 1;
   // horizontal shop board sticking out over the sidewalk (faces traffic)
-  if (rnd(seed + 7.1) > .35){
+  if (d < 170 && rnd(seed + 7.1) > .35){
     const zs = z0 + 15 + rnd(seed + 7.3) * 3;
     if (zs - camZ > NEAR){
       const sc = hex(pick(D.sign, rnd(seed + 7.5)));
@@ -1552,7 +1563,7 @@ function drawBuilding0(k, side){
     }
   }
   // vertical shop sign
-  if (rnd(seed + 1.9) < D.signP){
+  if (d < 190 && rnd(seed + 1.9) < D.signP){
     const zs = z0 + 2 + rnd(seed + 2.3) * 11;
     if (zs - camZ > NEAR){
       const h0 = 4.5, h1 = Math.min(h - .3, h0 + 3 + rnd(seed + 2.9) * 3.5);
@@ -1566,12 +1577,12 @@ function drawBuilding0(k, side){
           ctx.fillStyle = rgb(fogc(china ? [255,214,90] : [255,255,255])); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           if (china && /[一-鿿]/.test(txt)){ // Chinese characters stacked top to bottom
             const ch = [...txt], sz = Math.min(w * .66, hh / ch.length * .82);
-            ctx.font = `800 ${sz.toFixed(1)}px 'Noto Sans SC', Rubik, sans-serif`;
+            ctx.font = `800 ${Math.round(sz)}px 'Noto Sans SC', Rubik, sans-serif`;
             ch.forEach((c, i) => ctx.fillText(c, p[0], p[1] + (i - (ch.length - 1) / 2) * sz * 1.08));
           } else {
             ctx.save(); ctx.translate(p[0], p[1]);
-            if (txt.length > 2){ ctx.rotate(-Math.PI / 2); ctx.font = `800 ${Math.min(w * .6, hh / (txt.length * .62)).toFixed(1)}px 'Noto Sans Thai', Rubik, sans-serif`; }
-            else ctx.font = `800 ${(w * .62).toFixed(1)}px 'Noto Sans Thai', Rubik, sans-serif`;
+            if (txt.length > 2){ ctx.rotate(-Math.PI / 2); ctx.font = `800 ${Math.round(Math.min(w * .6, hh / (txt.length * .62)))}px 'Noto Sans Thai', Rubik, sans-serif`; }
+            else ctx.font = `800 ${Math.round(w * .62)}px 'Noto Sans Thai', Rubik, sans-serif`;
             ctx.fillText(txt, 0, 0); ctx.restore();
           }
         }
@@ -1678,7 +1689,7 @@ function drawStop(o){
   const oct = (r, c) => { const pts = []; for (let i = 0; i < 8; i++){ const a = Math.PI / 8 + i * Math.PI / 4; pts.push(P(x + Math.cos(a) * r, z, 2.15 + Math.sin(a) * r)); } poly(pts, c); };
   oct(.52, COL.white); oct(.45, [214, 40, 40]);
   const c = P(x, z, 2.15), r = .45 * c[2];
-  if (r > 5){ ctx.fillStyle = rgb(fogc(COL.white)); ctx.font = `900 ${(r * .6).toFixed(1)}px Rubik, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('STOP', c[0], c[1] + .5); }
+  if (r > 5){ ctx.fillStyle = rgb(fogc(COL.white)); ctx.font = `900 ${Math.round(r * .6)}px Rubik, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('STOP', c[0], c[1] + .5); }
 }
 function drawObj(o){ tintK = THEME.night ? .55 : 1; drawObj0(o); tintK = 1; }
 function drawObj0(o){
@@ -1880,6 +1891,7 @@ function mNaga(x, z, s, y){
 function mTallTree(x, z, s, y, seed){
   const tr = [176,160,140], g = rnd(seed) > .5 ? [52,120,62] : [64,134,58], h = (6 + rnd(seed + .2) * 3) * s;
   box(x, .22 * s, z - .22 * s, z + .22 * s, y, y + h, tr);
+  if (z - camZ > 150){ hull(x, z - 2.2 * s, z + 2.2 * s, y + h - 1.6 * s, y + h + 2.6 * s, 2.3 * s, .9 * s, 1.0 * s, 1.0 * s, g); return; }
   box(x + .9 * s, .9 * s, z - .7 * s, z + .7 * s, y + h - 2.6 * s, y + h - 1.6 * s, shade(g, .06));
   hull(x, z - 2.2 * s, z + 2.2 * s, y + h - 1.6 * s, y + h + .8 * s, 2.0 * s, 2.4 * s, -.2 * s, -.2 * s, shade(g, -.08));
   hull(x, z - 2.2 * s, z + 2.2 * s, y + h + .8 * s, y + h + 2.6 * s, 2.4 * s, .9 * s, 1.3 * s, 1.3 * s, g);
@@ -1934,7 +1946,8 @@ function drawCityWall(z0, z1, k){
   box(xc, .6, za, zb, 0, 3.8, br, shade(br, -.1), br, br);
   const zA = Math.max(za, camZ + NEAR);
   if (zb > zA) for (const hh of [1.25, 2.5]) poly([P(xin, zA, hh), P(xin, zb, hh), P(xin, zb, hh + .1), P(xin, zA, hh + .1)], br2);
-  for (let z = za + .4; z < zb; z += 1.6) if (z + .8 - camZ > NEAR) box(xc, .6, z, z + .8, 3.8, 4.5, br);
+  if (z0 - camZ < 120) { for (let z = za + .4; z < zb; z += 1.6) if (z + .8 - camZ > NEAR) box(xc, .6, z, z + .8, 3.8, 4.5, br); }
+  else box(xc, .6, za, zb, 3.8, 4.3, br);
   // fountains in the moat
   if (k % 2 === 0){
     const fx0 = -(ROAD_HALF + 5.6), fz = z0 + 10;
@@ -1944,7 +1957,7 @@ function drawCityWall(z0, z1, k){
 function drawForestBlock(k, side, z0, z1, seed){
   for (let i = 2; i >= 0; i--){
     const r = rnd(seed + i * 1.3), x = side * (ROAD_HALF + 4.4 + r * 6 + i * 2.2), z = z0 + 2 + i * 6.5 + rnd(seed + i + .5) * 3;
-    if (z + 2.5 - camZ < NEAR) continue;
+    if (z + 2.5 - camZ < NEAR || (i !== 1 && z - camZ > 170)) continue;
     setFog(z); mTallTree(x, z, .95 + r * .5, 0, seed + i);
   }
   if (k % 8 === 5 && side > 0){
@@ -1999,6 +2012,7 @@ function drawMosque(side, z0, z1, inner){
 }
 function mPalm(x, z, q, y, seed){
   const H = h => y + h * q, tr = [150,124,92], g = [56,150,72], g2 = [44,128,62], lean = (rnd(seed) - .5) * .8;
+  if (z - camZ > 120){ box(x + lean / 2, .14, z - .14, z + .14, y, H(6.4), tr); box(x + lean, 1.3, z - 1.2, z + 1.2, H(5.9), H(6.5), g); return; }
   for (let i = 0; i < 4; i++) box(x + lean * i / 4, .15 - i * .015, z - .15, z + .15, H(i * 1.6), H(i * 1.6 + 1.62), shade(tr, i % 2 ? -.06 : 0));
   const cx = x + lean, top = H(6.4);
   box(cx, .18, z + .4, z + 1.8, top - .5, top, g);
@@ -2232,9 +2246,11 @@ let lastHud = '';
 function buildMarks(){
   $('hMarks').innerHTML = CONFIG.tiers.map(tr => `<div class="mark" data-km="${tr.km}" style="left:${tr.km / CONFIG.raceKm * 100}%"><em>${fmtTHB(tr.thb)}</em></div>`).join('');
 }
+let lastFill = '';
+const hFill = document.getElementById('hFill');
 function updateHud(){
   const km = displayKm(), key = G.score + '|' + km.toFixed(1) + '|' + G.lives;
-  $('hFill').style.width = (km / CONFIG.raceKm * 100) + '%';
+  const fk = (km / CONFIG.raceKm).toFixed(3); if (fk !== lastFill){ lastFill = fk; hFill.style.transform = `scaleX(${fk})`; }
   if (key === lastHud) return; lastHud = key;
   $('hScore').textContent = G.score; $('hKm').textContent = km.toFixed(1);
   document.querySelectorAll('#lives i').forEach((el, i) => el.classList.toggle('lost', i >= G.lives));
@@ -2345,7 +2361,7 @@ async function startGame(){
   }
   newGame(); lastHud = ''; G.wet = 0; G.fwK = -1;
   for (const k in input) input[k] = false;
-  document.querySelectorAll('.btn').forEach(b => b.classList.remove('on'));
+  padPtr.clear(); document.querySelectorAll('.btn').forEach(b => b.classList.remove('on'));
   showScreen(null); hud.style.display = 'block'; showControls(); updateHud();
   state = 'play';
   SND.engineStart(); SND.musicStart();
@@ -2367,12 +2383,25 @@ function showResult(){
 }
 
 /* ========================= Input ========================= */
-document.querySelectorAll('.btn').forEach(b => {
-  const k = b.dataset.k;
-  const on = e => { e.preventDefault(); input[k] = true; b.classList.add('on'); try{ b.setPointerCapture(e.pointerId); }catch(_){} };
-  const off = () => { input[k] = false; b.classList.remove('on'); };
-  b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
-  b.addEventListener('contextmenu', e => e.preventDefault());
+// each pad tracks its own pointers: the key under the thumb is pressed, and sliding across switches keys at once
+const PADS = [...document.querySelectorAll('#controls .pad')];
+const padPtr = new Map();   // pointerId -> { pad, key }
+function padKeyAt(pad, x){
+  const bs = [...pad.querySelectorAll('.btn')].filter(b => b.offsetParent !== null);
+  let best = null, bd = 1e9;
+  for (const b of bs){ const r = b.getBoundingClientRect(), c = (r.left + r.right) / 2, d = Math.abs(x - c); if (d < bd){ bd = d; best = b; } }
+  return best && best.dataset.k;
+}
+function syncKeys(){
+  const down = new Set([...padPtr.values()].map(v => v.key));
+  for (const b of document.querySelectorAll('#controls .btn')){ const on = down.has(b.dataset.k); input[b.dataset.k] = on; b.classList.toggle('on', on); }
+}
+PADS.forEach(pad => {
+  pad.addEventListener('pointerdown', e => { e.preventDefault(); try{ pad.setPointerCapture(e.pointerId); }catch(_){} padPtr.set(e.pointerId, { pad, key: padKeyAt(pad, e.clientX) }); syncKeys(); });
+  pad.addEventListener('pointermove', e => { const s = padPtr.get(e.pointerId); if (!s) return; const k = padKeyAt(pad, e.clientX); if (k !== s.key){ s.key = k; syncKeys(); } });
+  const up = e => { if (padPtr.delete(e.pointerId)) syncKeys(); };
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up); pad.addEventListener('lostpointercapture', up);
+  pad.addEventListener('contextmenu', e => e.preventDefault());
 });
 const KEYS = { ArrowLeft:'left', KeyA:'left', ArrowRight:'right', KeyD:'right', ArrowUp:'gas', KeyW:'gas', ArrowDown:'brake', KeyS:'brake', Space:'brake' };
 window.addEventListener('keydown', e => { const k = KEYS[e.code]; if (k && state === 'play'){ input[k] = true; e.preventDefault(); } });
@@ -2400,8 +2429,19 @@ document.addEventListener('visibilitychange', () => {
 
 /* ========================= Loop ========================= */
 let last = performance.now();
+// adaptive resolution: drop the internal render width when frames run long, bring it back when there is headroom
+const RES = { max: CONFIG.retroWidth, min: 300, ema: 16, t: 0 };
+function adaptRes(ms){
+  if (state !== 'play' || ms > 200) return;
+  RES.ema += (ms - RES.ema) * .05; RES.t += ms;
+  if (RES.t < 1500) return;
+  if (RES.ema > 21 && CONFIG.retroWidth > RES.min){ CONFIG.retroWidth = Math.max(RES.min, CONFIG.retroWidth - 30); RES.t = 0; resize(); }
+  else if (RES.ema < 13 && CONFIG.retroWidth < RES.max && RES.t > 5000){ CONFIG.retroWidth = Math.min(RES.max, CONFIG.retroWidth + 30); RES.t = 0; resize(); }
+}
 function frame(now){
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const ms = now - last;
+  const dt = Math.min(0.05, ms / 1000); last = now;
+  adaptRes(ms);
   if (!paused && G && (state === 'play')){ update(dt); if (state === 'play') updateHud(); }
   if (G && state !== 'menu') render();
   requestAnimationFrame(frame);
